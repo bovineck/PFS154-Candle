@@ -4,6 +4,8 @@
 
 It features authentic multi-channel pseudo-random flickering, automatic day/night sensing using the internal comparator with hysteresis, and smart low-voltage protection for Lithium-Ion Capacitors (LICs).
 
+Use https://github.com/free-pdk/free-pdk-examples for latest (working) includes etc
+
 ## 1. Features
 
 - **32-bit Xorshift PRNG Flame Simulation:** Drives 3 independent LED channels with dynamic wave limits for organic, realistic candle motion (Sputter, Normal, and Calm phases).
