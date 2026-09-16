@@ -79,27 +79,36 @@ const uint8_t Hysteresis = 1;
 
 ## 6. Python script and output
 
-The script numbers-gen.py is a nice check on the code running in the IC as it can simulate a time frame and produce a graphical output of the LEDs ramping up and down, as well as an audio file that can be played to check for repeats or other side effects. The audio file candle_flicker_audio.wav and the png file graph.png are provided as an example using the command "python3 numbers-gen.py -t 1200 -w 15 -a 200 -o graph.png"
+The script numbers-gen.py is a nice check on the code running in the IC as it can simulate a time frame and produce a graphical output of the LEDs ramping up and down, as well as an audio file that can be played to check for repeats or other side effects. 
+
+The audio file candle_flicker_audio.wav and the png file graph.png are provided as an example using the command:
+
+    "python3 numbers-gen.py -t 1200 -w 15 -a 200 -o graph.png"
 
 The python script accepts the following arguments:
 
 usage: numbers-gen.py [-h] [-s SAMPLES] [-t START] [-w WINDOW] [-a AVG_WINDOW] [--seed SEED] [-o OUTPUT] [--no-audio]
 
-PFS154 Supercapacitor Candle Simulation with Time-Synced Audio-Visual Dashboard
-
 options:
   -h, --help            show this help message and exit
+
   -s SAMPLES, --samples SAMPLES
                         Total flicker steps to simulate (Auto-calculated from target time if omitted) (default: None)
+
   -t START, --start START
                         Start time for plot capture in seconds (e.g., 1000 = 16.7 min) (default: 1000.0)
+
   -w WINDOW, --window WINDOW
                         Window duration to plot in seconds (e.g., 120 = 2 min) (default: 120.0)
+
   -a AVG_WINDOW, --avg-window AVG_WINDOW
                         Moving average window size (steps) (default: 200)
+
   --seed SEED           32-bit PRNG initial seed (default: 29012026)
+
   -o OUTPUT, --output OUTPUT
                         Output PNG filename snapshot (default: None)
+                        
   --no-audio            Skip generating WAV audio export (default: False)
 
 
