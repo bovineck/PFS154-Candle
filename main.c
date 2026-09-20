@@ -142,7 +142,7 @@ void mydelay(uint8_t counter) {
 }
 
 // Xorshift32 PRNG: Bumps sequence length to 4,294,967,295 steps (~2 years)
-// More about this here - https://www.iro.umontreal.ca/~lecuyer/myftp/papers/xorshift.pdf
+// More about this here - https://www.alanzucconi.com/2026/08/15/xorshift-generators/
 uint16_t gimmerand(uint16_t small, uint16_t big) {
   myrand ^= (myrand << 13);
   myrand ^= (myrand >> 17);
