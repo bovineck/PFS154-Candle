@@ -22,15 +22,23 @@ mpl.rcParams['agg.path.chunksize'] = 20000
 # =============================================================================
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="PFS154 Supercapacitor Candle Simulation with Time-Synced Audio-Visual Dashboard",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        description="PFS154 Supercapacitor Candle Simulation with ASCII Dieharder PRNG Generator",
+        epilog=(
+            "Dieharder Usage Examples:\n"
+            "  Pipe directly to dieharder:\n"
+            "    python3 numbers-gen.py --dieharder -s 10000000 | dieharder -a -g 201\n\n"
+            "  Save ASCII output file for dieharder analysis:\n"
+            "    python3 numbers-gen.py --dieharder -s 5000000 -o prng_stream.txt\n"
+            "    dieharder -a -g 201 -f prng_stream.txt\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
     parser.add_argument(
         "-s", "--samples", 
         type=int, 
         default=None, 
-        help="Total flicker steps to simulate (Auto-calculated from target time if omitted)"
+        help="Total steps to simulate (For --dieharder: total numbers to output, default=10,000,000)"
     )
     parser.add_argument(
         "-t", "--start", 
@@ -60,12 +68,17 @@ def parse_arguments():
         "-o", "--output", 
         type=str, 
         default=None, 
-        help="Output PNG filename snapshot"
+        help="Output snapshot PNG file OR output text file when --dieharder is set"
     )
     parser.add_argument(
         "--no-audio", 
         action="store_true", 
         help="Skip generating WAV audio export"
+    )
+    parser.add_argument(
+        "--dieharder", 
+        action="store_true", 
+        help="Export raw 32-bit ASCII PRNG numbers formatted for dieharder analysis"
     )
 
     if len(sys.argv) == 1:
@@ -76,13 +89,46 @@ def parse_arguments():
 
 
 # =============================================================================
-# Bare-Metal C-Code Emulation
+# Bare-Metal C-Code Emulation & Dieharder Exporter
 # =============================================================================
 def run_simulation(args):
-    # Switch to dark mode for a workbench oscilloscope feel
+    # =========================================================================
+    # Dieharder ASCII Stream Exporter
+    # =========================================================================
+    if args.dieharder:
+        total_numbers = args.samples if args.samples is not None else 10_000_000
+
+        # Determine target output stream (file or stdout)
+        out_stream = open(args.output, "w") if args.output else sys.stdout
+
+        try:
+            # Dieharder ASCII Header Specification
+            out_stream.write("# PRNG Stream from Xorshift32 PFS154 Simulation\n")
+            out_stream.write("type: d\n")
+            out_stream.write(f"count: {total_numbers}\n")
+            out_stream.write("numbit: 32\n")
+
+            myrand = np.uint32(args.seed)
+
+            # Generate and print uint32 random numbers line-by-line
+            for _ in range(total_numbers):
+                myrand = (myrand ^ ((myrand << np.uint32(13)) & np.uint32(0xFFFFFFFF))) & np.uint32(0xFFFFFFFF)
+                myrand = (myrand ^ (myrand >> np.uint32(17))) & np.uint32(0xFFFFFFFF)
+                myrand = (myrand ^ ((myrand << np.uint32(5)) & np.uint32(0xFFFFFFFF))) & np.uint32(0xFFFFFFFF)
+                
+                out_stream.write(f"{int(myrand)}\n")
+
+        finally:
+            if args.output and out_stream != sys.stdout:
+                out_stream.close()
+                print(f"Successfully saved {total_numbers:,} ASCII 32-bit random numbers to '{args.output}'.")
+
+        sys.exit(0)
+
+    # =========================================================================
+    # Visual Oscilloscope & Audio Simulation Mode
+    # =========================================================================
     plt.style.use('dark_background')
-    
-    # Hide the GUI window toolbar to prevent directory confusion on manual saves
     plt.rcParams['toolbar'] = 'none'
 
     myrand = np.uint32(args.seed)
@@ -169,13 +215,11 @@ def run_simulation(args):
 
     end_time_sec = args.start + args.window
 
-    # Auto-calculate sample limit if omitted (~35,000 steps per second)
     if args.samples is None:
         max_samples = int((end_time_sec + 5) * 35000)
     else:
         max_samples = args.samples
 
-    # Target slice storage
     sliced_time = []
     sliced_slow = []
     sliced_med = []
@@ -283,7 +327,6 @@ def run_simulation(args):
     kernel = np.ones(args.avg_window) / args.avg_window
     ch_moving_avg = np.convolve(ch_combined, kernel, mode="same")
 
-    # Time-Synced Animation Configuration (Targeting steady 30 FPS)
     target_fps = 30
     target_frames = int(max(30, args.window * target_fps))
     anim_stride = max(1, len(time_sec) // target_frames)
@@ -297,7 +340,6 @@ def run_simulation(args):
 
     anim_interval = int(1000.0 / target_fps)
 
-    # Prepare Audio Buffers for Export & Live Playback (Clean original logic)
     sample_rate = 22050
     audio_time_grid = np.arange(args.start, end_time_sec, 1.0 / sample_rate)
     
@@ -314,7 +356,6 @@ def run_simulation(args):
     left_pcm = np.int16((left_audio / max_l * 32767) if max_l > 0 else left_audio)
     right_pcm = np.int16((right_audio / max_r * 32767) if max_r > 0 else right_audio)
 
-    # Save WAV file
     if not args.no_audio and len(time_sec) > 1:
         wav_filename = "candle_flicker_audio.wav"
         with wave.open(wav_filename, "w") as wav_file:
@@ -327,14 +368,12 @@ def run_simulation(args):
             wav_file.writeframes(stereo_data_int16.tobytes())
         print(f"Saved exact {args.window:.1f}s audio file to '{wav_filename}'.")
 
-    # Prepare stereo float buffer for live playback via sounddevice
     stereo_float = None
     if not args.no_audio and HAS_SOUNDDEVICE and len(time_sec) > 1:
         stereo_float = np.empty((left_pcm.size, 2), dtype=np.float32)
         stereo_float[:, 0] = left_pcm.astype(np.float32) / 32767.0
         stereo_float[:, 1] = right_pcm.astype(np.float32) / 32767.0
 
-    # Build compact 3-row figure layout
     fig, (ax_leds, ax1, ax2) = plt.subplots(
         3, 1, figsize=(14, 10), sharex=False, 
         gridspec_kw={"height_ratios": [0.6, 2, 1], "hspace": 0.2}
@@ -342,7 +381,6 @@ def run_simulation(args):
 
     ax2.sharex(ax1)
 
-    # Configure LED Panel Top Axis with square limits (0 to 3) for perfect circles
     ax_leds.set_xlim(0, 3)
     ax_leds.set_ylim(0, 3)
     ax_leds.set_aspect('equal')
@@ -358,7 +396,6 @@ def run_simulation(args):
     ax_leds.add_patch(led_med)
     ax_leds.add_patch(led_fast)
 
-    # Set up static axis ranges for the dark oscilloscope plots
     ax1.set_xlim(a_time[0], a_time[-1])
     ax1.set_ylim(np.min([a_slow, a_med, a_fast]) - 5, np.max([a_slow, a_med, a_fast]) + 10)
     ax1.set_ylabel("PWM Duty (0-255)", fontsize=10)
@@ -371,7 +408,6 @@ def run_simulation(args):
     ax2.set_ylabel("Total Sum", fontsize=10)
     ax2.grid(True, linestyle="--", alpha=0.3)
 
-    # Initialize live-drawing graph lines
     line_slow, = ax1.plot([], [], label="Slow Channel (PA0 / LED3)", color="#ff9933", alpha=0.9, linewidth=1.0)
     line_med,  = ax1.plot([], [], label="Med Channel (PA5 / LED2)", color="#ffcc00", alpha=0.9, linewidth=1.0)
     line_fast, = ax1.plot([], [], label="Fast Channel (PA4 / LED1)", color="#ff4444", alpha=0.9, linewidth=1.0)
@@ -381,7 +417,6 @@ def run_simulation(args):
     line_comb, = ax2.plot([], [], label="Combined Intensity (Sum)", color="#ff7700", alpha=0.6, linewidth=0.7)
     ax2.legend(loc="upper right", fontsize=9, framealpha=0.5)
 
-    # Populate lines temporarily to save the complete static snapshot
     line_slow.set_data(a_time, a_slow)
     line_med.set_data(a_time, a_med)
     line_fast.set_data(a_time, a_fast)
@@ -392,17 +427,14 @@ def run_simulation(args):
     fig.savefig(out_file, dpi=300)
     print(f"Saved complete static plot snapshot to '{out_file}'.")
 
-    # Reset lines back to empty for the live animation
     line_slow.set_data([], [])
     line_med.set_data([], [])
     line_fast.set_data([], [])
     line_avg.set_data([], [])
     line_comb.set_data([], [])
 
-    # Track audio playback state to trigger it precisely on Frame 0
     audio_played = False
 
-    # Real-time animation update function
     def update_frame(frame_idx):
         nonlocal audio_played
         if frame_idx == 0 and stereo_float is not None and not audio_played:
